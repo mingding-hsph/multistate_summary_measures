@@ -848,6 +848,8 @@ path_table_pop=rbind(path_1_final_pop,
 rownames(path_table_pop)=c("S0→S4","S0→S1→S4","S0→S2→S4","S0→S1→S2→S4","S0→S3→S4",
                                    "S0→S1→S3→S4","S0→S2→S3→S4","S0→S1→S2→S3→S4", "S4")
 
+##estimate the probability of each path among those who were dead (S4) by the end of follow up
+
 path_table_pop_rescale=path_table_pop[,2]/sum(path_table_pop[,2])
 
 
