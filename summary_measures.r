@@ -16,6 +16,9 @@ simu_data_all<-read.table("./multi_state_data.txt")
 
 simu_data_base <-select(simu_data_all, ID)
 
+###make multiple copies of each ID by person-time (such as age)
+###the purpose is for prediction use to estimate the age-specific transiton rates 
+
 break_interval=2
 fup=30
 analysis_interval=fup/break_interval
@@ -55,9 +58,9 @@ for (simu in 1:var_loop){
   
 simu_data_all_boot<-simu_data_all[sample(1:nrow(simu_data_all), size=nrow(simu_data_all), replace=TRUE),]
 
-##subset datasets
+##subset datasets by disease states
 
-##state 0 
+##starting from state 0 
 
 data0<-simu_data_all_boot[which(simu_data_all_boot$marker1==1),]
 data0$tte<-data0$tte1
@@ -72,14 +75,13 @@ data0<-data0%>%
     )  
   )
 
-
 table(data0$S0_ylong)  
 table(data0$S0_y)
 
 summary(data0$S0_ylong)  
 summary(data0$S0_y)
 
-##state 1 
+##starting from state 1 
 
 data1<-simu_data_all_boot[which(simu_data_all_boot$marker2==1),]
 data1$tte<-data1$tte2
@@ -100,7 +102,7 @@ table(data1$S1_ylong)
 table(data1$S1_y)
 
 
-##state 2
+##starting from state 2
 
 data2<-simu_data_all_boot[which(simu_data_all_boot$marker3==1),]
 
@@ -121,7 +123,7 @@ summary(data2$tte)
 table(data2$S2_ylong)  
 table(data2$S2_y)
 
-##state 3
+##starting from state 3
 
 data3<-simu_data_all_boot[which(simu_data_all_boot$marker4==1),]
 
@@ -137,7 +139,7 @@ data3 <- data3 %>%
          )
   )
 
-##change data from wide to long
+##change data structure from wide to long
 
 library(survival)
 
@@ -194,8 +196,7 @@ table(data2_long$interval)
 table(data3_long$interval)
 
 
-
-##derive longitiduanal outcomes
+##define competing outcomes in each data subset
 
 data0_long$S0_mylong<-0
 data0_long[which(data0_long$S0_y==1 & data0_long$S0_ylong==1),]$S0_mylong<-1
@@ -311,19 +312,21 @@ data3_long<-data3_long %>%
     
   )
 
+  ##fit cause-specific Cox models within each data subset
 cfit0 <- CSC(formula = list(Hist(tte_cmr,S0_mylong) ~ rcs(interval,3)), data = data0_long)
 
 cfit1 <- CSC(formula = list(Hist(tte_cmr,S1_mylong) ~rcs(interval,3)), data = data1_long)
-
-
-##for models cfit2 and cfit3, test the markov assumption in the original population before running bootstrap, 
-## include interaction terms of time and past states into the model, 
-## use likelihood ratio test, with a p<0.05 indicating that the markov assumption is violated
 
 cfit2 <- CSC(formula = list(Hist(tte_cmr,S2_mylong) ~ rcs(interval,3)+as.factor(sub2)), data = data2_long)
 
 cfit3 <- coxph(Surv(tte_cmr,S3_y_4) ~ rcs(interval,3)+as.factor(sub3), data = data3_long, x = TRUE)
 
+##for models cfit2 and cfit3, test the markov assumption in the original population before running bootstrap, 
+## by including interaction terms of time and past states into the model, 
+## apply likelihood ratio test, with a p<0.05 indicating that the markov assumption is violated
+
+#estimate time(age)-specific transition rates
+  
 ##data subset 0
 pfit01 <- predict(cfit0, newdata = simu_data_long, cause = 1, times =1, se = F, keep.newdata = FALSE)
 pfit02 <- predict(cfit0, newdata = simu_data_long, cause = 2, times =1, se = F, keep.newdata = FALSE)
@@ -392,7 +395,7 @@ new_data3_4$sub3="htn-chf"
 new_data3=rbind(new_data3_1,new_data3_2, new_data3_3, new_data3_4)
 
 
-##in case the data from this dataset is empty, use this ifelse
+##in case the data from this dataset is empty, use the following code 
 
 if (nrow(as.matrix(table(new_data3$sub3)))==4){
 
@@ -427,7 +430,7 @@ predict3_012=predict3[which(predict3$sub3=="htn-chd-chf"),]
 
   for (i in 1:nrow(simu_data_base)) {
     
-##construct the transition rate matrix
+##construct the transition rate matrix at each time 
     
     for (t in 1:tm) {    
 
@@ -469,7 +472,7 @@ predict3_012=predict3[which(predict3$sub3=="htn-chd-chf"),]
     
     SOP_var_0=c(1, 0, 0, 0, 0, 0, 0, 0, 0)
   
-    ##SOP at the end of the first year  t=1
+    ##state occupational probability at the end of the first year t=1
     
     SOP_var[[1+(i-1)*tm+(simu-1)*tm*nrow(simu_data_base)]]=SOP_var_0%*%(I+TR_var[[1+(i-1)*tm+(simu-1)*tm*nrow(simu_data_base)]])
     
@@ -478,8 +481,8 @@ predict3_012=predict3[which(predict3$sub3=="htn-chd-chf"),]
     }
     
     
-    #as to death (S4) before the end of follow up: once death (S4) probability>0.95, 
-    ##assume dead and SOP and TR are treated as 0 after death, so that this will not affect the estimation of MALY and PATH
+    #as to death (S4) before the end of follow up: 
+    ###if death (S4) probability>0.95, we assume death and SOP and TR are coded as 0 after death, which will not affect the estimation of MALY and PATH
     
     for (t in 1:tm) {
       if (SOP_var[[t +(i-1)*tm+(simu-1)*tm*nrow(simu_data_base)]][9]>=0.95){
@@ -510,19 +513,20 @@ predict3_012=predict3[which(predict3$sub3=="htn-chd-chf"),]
       
     }
     
-    ##SSLY and MALY
+##SSLY and MALY
     
     SSLY[[1+(i-1)*tm+(simu-1)*tm*nrow(simu_data_base)]]=SOP_var[[1+(i-1)*tm+(simu-1)*tm*nrow(simu_data_base)]]
     
+##assign weight to each disease, here we used the weight of heart disease as an example 
     
-DW1=1 
-DW2=1-0.049
-DW3=1-0.072
-DW4=(1-0.072)*(1-0.049)
-DW5=1-0.074
-DW6=(1-0.074)*(1-0.049)
-DW7=(1-0.074)*(1-0.072)
-DW8=(1-0.074)*(1-0.072)*(1-0.049)
+DW1=1                    #healthy
+DW2=1-0.049              #at metabolic risk
+DW3=1-0.072              #CHD without metabolic risk factors
+DW4=(1-0.072)*(1-0.049)  #multimorbidity: CHD with metabolic risk factors
+DW5=1-0.074              #Heart failure without metabolic risk factors or CHD
+DW6=(1-0.074)*(1-0.049)  #multimorbidity: Heart failure with metabolic risk factors
+DW7=(1-0.074)*(1-0.072)  #multimorbidity: Heart failure with CHD
+DW8=(1-0.074)*(1-0.072)*(1-0.049)  #multimorbidity: Heart failure with metabolic risk factors and CHD
 
     MALY[[1+(i-1)*tm+(simu-1)*tm*nrow(simu_data_base)]]=
       SSLY[[1+(i-1)*tm+(simu-1)*tm*nrow(simu_data_base)]][1,1]*DW1+
