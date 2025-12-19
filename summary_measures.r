@@ -50,7 +50,7 @@ path_year<- list()
 
 I=diag(nrow=9)
 
-var_loop=20     ##bootstrap loops
+var_loop=1000     ##bootstrap loops
 
 ##start of bootstrap
 
