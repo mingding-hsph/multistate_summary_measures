@@ -622,7 +622,7 @@ for (simu in 1:var_loop) {
   
   for (i in 1:nrow(simu_data_base)) {
     
-    ##individual level
+    ##for each person  
     
     SSLY_1[simu,i]=SSLY[[tm+(i-1)*tm+(simu-1)*tm*nrow(simu_data_base)]][1,1]
     SSLY_2[simu,i]=SSLY[[tm+(i-1)*tm+(simu-1)*tm*nrow(simu_data_base)]][1,2]
@@ -676,7 +676,7 @@ path_9_final=matrix(NA, ncol=3,nrow=nrow(simu_data_base))
 
 for (h in 1:nrow(simu_data_base)) {
   
-  ##individual level
+  ##for each person
   
   SSLY_1_final[h,]=quantile(SSLY_1[,h], probs = c(0.025, 0.5, 0.975))
   SSLY_2_final[h,]=quantile(SSLY_2[,h], probs = c(0.025, 0.5, 0.975))
